@@ -1,0 +1,40 @@
+const int trigPin = 9;
+const int echoPin = 10;
+
+long duration;
+float distance_cm;
+float distance_inch;
+
+void setup() {
+  Serial.begin(9600);       // Start serial monitor
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+}
+
+void loop() {
+
+  // 1️⃣ Clear the trig pin
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  // 2️⃣ Send 10us pulse to trigger
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  // 3️⃣ Read echo time
+  duration = pulseIn(echoPin, HIGH);
+
+  // 4️⃣ Convert to distance
+  distance_cm = duration * 0.0343 / 2;
+  distance_inch = distance_cm * 0.3937;
+
+  // 5️⃣ Print results
+  Serial.print("Distance: ");
+  Serial.print(distance_cm);
+  Serial.print(" cm   |   ");
+  Serial.print(distance_inch);
+  Serial.println(" inch");
+
+  delay(500);
+}
