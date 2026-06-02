@@ -1,0 +1,301 @@
+#include <Servo.h>
+
+// ---------- FRONT ULTRASONIC ----------
+#define TRIG_FRONT 2
+#define ECHO_FRONT 3
+
+// ---------- LEFT ULTRASONIC ----------
+#define TRIG_LEFT 4
+#define ECHO_LEFT 5
+
+// ---------- RIGHT ULTRASONIC ----------
+#define TRIG_RIGHT 6
+#define ECHO_RIGHT 7
+
+// ---------- MOTOR DRIVER ----------
+#define ENA A4
+#define ENB A5
+
+#define IN1 8
+#define IN2 9
+#define IN3 10
+#define IN4 11
+
+// ---------- SERVOS ----------
+#define SERVO1_PIN 12
+#define SERVO2_PIN 13
+
+Servo servo1;
+Servo servo2;
+
+int stopDistance = 25;
+int motorSpeed = 150;
+
+int turn90Time = 500;
+int alignTime = 300;
+int forwardTime = 800;
+int reverseTime = 800;
+
+long readDistance(int trigPin, int echoPin) {
+
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);
+
+  if (duration == 0) return 999;
+
+  return duration * 0.034 / 2;
+}
+
+void setSpeed() {
+  analogWrite(ENA, motorSpeed);
+  analogWrite(ENB, motorSpeed);
+}
+
+void stopMotors() {
+
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+}
+
+void forward() {
+
+  setSpeed();
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void reverse() {
+
+  setSpeed();
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void left() {
+
+  setSpeed();
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void right() {
+
+  setSpeed();
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void turnLeft90() {
+
+  left();
+  delay(turn90Time);
+
+  stopMotors();
+  delay(200);
+}
+
+void turnRight90() {
+
+  right();
+  delay(turn90Time);
+
+  stopMotors();
+  delay(200);
+}
+
+void moveForwardBit() {
+
+  forward();
+  delay(forwardTime);
+
+  stopMotors();
+  delay(200);
+}
+
+void goAroundObject() {
+
+  turnLeft90();
+  moveForwardBit();
+
+  turnRight90();
+  moveForwardBit();
+
+  turnRight90();
+  moveForwardBit();
+
+  turnLeft90();
+
+  stopMotors();
+}
+
+void reverseIntoObject() {
+
+  reverse();
+  delay(reverseTime);
+
+  stopMotors();
+  delay(300);
+}
+
+void activateServos() {
+
+  unsigned long startTime = millis();
+
+  while (millis() - startTime < 3000) {
+
+    servo1.write(0);
+    servo2.write(180);
+    delay(300);
+
+    servo1.write(180);
+    servo2.write(0);
+    delay(300);
+  }
+
+  servo1.write(90);
+  servo2.write(90);
+}
+
+void setup() {
+
+  pinMode(TRIG_FRONT, OUTPUT);
+  pinMode(ECHO_FRONT, INPUT);
+
+  pinMode(TRIG_LEFT, OUTPUT);
+  pinMode(ECHO_LEFT, INPUT);
+
+  pinMode(TRIG_RIGHT, OUTPUT);
+  pinMode(ECHO_RIGHT, INPUT);
+
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  servo1.attach(SERVO1_PIN);
+  servo2.attach(SERVO2_PIN);
+
+  servo1.write(90);
+  servo2.write(90);
+
+  Serial.begin(9600);
+}
+
+void loop() {
+
+  long frontDistance =
+      readDistance(TRIG_FRONT, ECHO_FRONT);
+
+  long leftDistance =
+      readDistance(TRIG_LEFT, ECHO_LEFT);
+
+  long rightDistance =
+      readDistance(TRIG_RIGHT, ECHO_RIGHT);
+
+  Serial.print("Front: ");
+  Serial.print(frontDistance);
+
+  Serial.print(" Left: ");
+  Serial.print(leftDistance);
+
+  Serial.print(" Right: ");
+  Serial.println(rightDistance);
+
+  // LEFT SENSOR
+  if (leftDistance < stopDistance) {
+
+    stopMotors();
+
+    delay(3000);
+
+    left();
+    delay(alignTime);
+
+    stopMotors();
+    delay(200);
+
+    goAroundObject();
+
+    reverseIntoObject();
+
+    activateServos();
+
+    while (true) {}
+  }
+
+  // RIGHT SENSOR
+  else if (rightDistance < stopDistance) {
+
+    stopMotors();
+
+    delay(3000);
+
+    right();
+    delay(alignTime);
+
+    stopMotors();
+    delay(200);
+
+    goAroundObject();
+
+    reverseIntoObject();
+
+    activateServos();
+
+    while (true) {}
+  }
+
+  // FRONT SENSOR
+  else if (frontDistance < stopDistance) {
+
+    stopMotors();
+
+    delay(3000);
+
+    goAroundObject();
+
+    reverseIntoObject();
+
+    activateServos();
+
+    while (true) {}
+  }
+
+  else {
+
+    forward();
+  }
+
+  delay(50);
+}
