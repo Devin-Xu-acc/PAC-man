@@ -1,0 +1,33 @@
+// ================== CONFIG ==================
+
+// Ultrasonic pins
+#define TRIG_FRONT 2
+#define ECHO_FRONT 3
+#define TRIG_LEFT  4
+#define ECHO_LEFT  5
+#define TRIG_RIGHT 6
+#define ECHO_RIGHT 7
+
+// Motor driver pins
+#define ENA 9      // PWM
+#define ENB 10     // PWM
+#define IN1 8
+#define IN2 11
+#define IN3 12
+#define IN4 13
+
+// Servos
+#define SERVO1_PIN A4
+#define SERVO2_PIN A5
+
+// Behaviour tuning
+const int   STOP_DISTANCE_CM   = 22;    // reacts earlier, more reliable
+const int   MOTOR_SPEED        = 165;   // balanced speed for TT motors
+const int   TURN_90_TIME_MS    = 430;   // accurate 90° turn for your wheelbase
+const int   FORWARD_BIT_MS     = 600;   // enough to clear object
+const int   REVERSE_BIT_MS     = 550;   // controlled reverse
+const int   EAT_DURATION_MS    = 2800;  // smooth Pac-Man action
+const int   SENSOR_SAMPLES     = 4;     // stable readings
+
+// Debug
+const bool  DEBUG_SERIAL       = true;
