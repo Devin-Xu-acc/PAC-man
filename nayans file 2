@@ -1,0 +1,431 @@
+#include <Servo.h>
+
+// ---------- ULTRASONIC SENSORS ----------
+#define TRIG_FRONT 2
+#define ECHO_FRONT 3
+
+#define TRIG_LEFT 4
+#define ECHO_LEFT 5
+
+#define TRIG_RIGHT 6
+#define ECHO_RIGHT 7
+
+// ---------- IR SENSORS ----------
+#define IR_BOTTOM_LEFT A0
+#define IR_BOTTOM_RIGHT A1
+#define IR_TOP_LEFT A2
+#define IR_TOP_RIGHT A3
+
+// Most IR sensors output LOW when they detect something.
+// If yours works opposite, change LOW to HIGH.
+#define IR_DETECTED LOW
+
+// ---------- MOTOR DRIVER ----------
+#define ENA A4
+#define ENB A5
+
+#define IN1 8
+#define IN2 9
+#define IN3 10
+#define IN4 11
+
+// ---------- SERVOS ----------
+#define SERVO1_PIN 12
+#define SERVO2_PIN 13
+
+Servo servo1;
+Servo servo2;
+
+// ---------- SETTINGS ----------
+int ultrasonicDistance = 30;
+int motorSpeed = 150;
+int creepSpeed = 90;
+
+int turn90Time = 350;
+int faceObjectTurnTime = 250;
+int forwardTime = 800;
+
+int reverseBackTime = 400;
+int reverseIntoTrashTime = 800;
+
+// ---------- SERVO POSITIONS ----------
+// Open position
+int servo1Open = 180;
+int servo2Open = 0;
+
+// More closed inward position
+int servo1Closed = 0;
+int servo2Closed = 180;
+
+// ---------- ULTRASONIC FUNCTION ----------
+long readDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);
+
+  if (duration == 0) {
+    return 999;
+  }
+
+  return duration * 0.034 / 2;
+}
+
+// ---------- IR FUNCTION ----------
+bool irDetected(int pin) {
+  return digitalRead(pin) == IR_DETECTED;
+}
+
+// ---------- MOTOR SPEED ----------
+void setSpeed(int speedValue) {
+  analogWrite(ENA, speedValue);
+  analogWrite(ENB, speedValue);
+}
+
+// ---------- MOTOR MOVEMENT ----------
+void stopMotors() {
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+}
+
+void forward() {
+  setSpeed(motorSpeed);
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void creepForward() {
+  setSpeed(creepSpeed);
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void reverse() {
+  setSpeed(motorSpeed);
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+void left() {
+  setSpeed(motorSpeed);
+
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+}
+
+void right() {
+  setSpeed(motorSpeed);
+
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+}
+
+// ---------- SERVO FUNCTIONS ----------
+void openServos() {
+  servo1.write(servo1Open);
+  servo2.write(servo2Open);
+}
+
+void closeServos() {
+  servo1.write(servo1Closed);
+  servo2.write(servo2Closed);
+}
+
+// ---------- TURNING ----------
+void turnLeft90() {
+  left();
+  delay(turn90Time);
+
+  stopMotors();
+  delay(200);
+}
+
+void turnRight90() {
+  right();
+  delay(turn90Time);
+
+  stopMotors();
+  delay(200);
+}
+
+void faceObjectFromLeft() {
+  left();
+  delay(faceObjectTurnTime);
+
+  stopMotors();
+  delay(300);
+}
+
+void faceObjectFromRight() {
+  right();
+  delay(faceObjectTurnTime);
+
+  stopMotors();
+  delay(300);
+}
+
+// ---------- MOVEMENT SEQUENCES ----------
+void moveForwardBit() {
+  forward();
+  delay(forwardTime);
+
+  stopMotors();
+  delay(200);
+}
+
+void reverseBackABit() {
+  reverse();
+  delay(reverseBackTime);
+
+  stopMotors();
+  delay(300);
+}
+
+void goAroundObject() {
+  stopMotors();
+  delay(300);
+
+  turnLeft90();
+  moveForwardBit();
+
+  turnRight90();
+  moveForwardBit();
+
+  turnRight90();
+  moveForwardBit();
+
+  turnLeft90();
+
+  stopMotors();
+  delay(300);
+}
+
+void reverseIntoTrash() {
+  // Keep servos OPEN before reversing
+  openServos();
+  delay(300);
+
+  // Reverse into trash while servos stay open
+  reverse();
+  delay(reverseIntoTrashTime);
+
+  // Stop after reversing
+  stopMotors();
+  delay(300);
+
+  // Close inward after reversing is done
+  closeServos();
+  delay(1200);
+}
+
+// ---------- TRASH ACTION ----------
+void handleTrash() {
+  Serial.println("TRASH DETECTED");
+
+  stopMotors();
+  delay(300);
+
+  reverseBackABit();
+
+  goAroundObject();
+
+  reverseIntoTrash();
+
+  stopMotors();
+
+  while (true) {
+    // Stop forever after collecting trash
+  }
+}
+
+// ---------- OBSTACLE ACTION ----------
+void handleObstacle() {
+  Serial.println("OBSTACLE DETECTED");
+
+  stopMotors();
+  delay(300);
+
+  reverseBackABit();
+
+  goAroundObject();
+
+  // After avoiding obstacle, keep driving
+}
+
+// ---------- CLASSIFICATION ----------
+void classifyWithIR() {
+  bool bottomLeft = irDetected(IR_BOTTOM_LEFT);
+  bool bottomRight = irDetected(IR_BOTTOM_RIGHT);
+  bool topLeft = irDetected(IR_TOP_LEFT);
+  bool topRight = irDetected(IR_TOP_RIGHT);
+
+  Serial.print("Bottom L: ");
+  Serial.print(bottomLeft);
+  Serial.print(" Bottom R: ");
+  Serial.print(bottomRight);
+  Serial.print(" Top L: ");
+  Serial.print(topLeft);
+  Serial.print(" Top R: ");
+  Serial.println(topRight);
+
+  // OBSTACLE:
+  // If one side has BOTH bottom and top detecting
+  if ((bottomLeft && topLeft) || (bottomRight && topRight)) {
+    handleObstacle();
+  }
+
+  // TRASH:
+  // If at least one bottom IR detects,
+  // and there is no matching top+bottom pair
+  else if (bottomLeft || bottomRight) {
+    handleTrash();
+  }
+
+  // UNSURE:
+  // If only top sensors detect, or nothing clear is detected
+  else {
+    Serial.println("IR UNSURE - TREATING AS OBSTACLE");
+    handleObstacle();
+  }
+}
+
+// ---------- MOVE CLOSER UNTIL IR SEES ----------
+void moveCloserUntilIRSees() {
+  unsigned long startTime = millis();
+
+  while (millis() - startTime < 4000) {
+    bool bottomLeft = irDetected(IR_BOTTOM_LEFT);
+    bool bottomRight = irDetected(IR_BOTTOM_RIGHT);
+    bool topLeft = irDetected(IR_TOP_LEFT);
+    bool topRight = irDetected(IR_TOP_RIGHT);
+
+    bool anyIR = bottomLeft || bottomRight || topLeft || topRight;
+
+    if (anyIR) {
+      stopMotors();
+      delay(300);
+      classifyWithIR();
+      return;
+    }
+
+    creepForward();
+    delay(50);
+  }
+
+  stopMotors();
+  delay(300);
+
+  classifyWithIR();
+}
+
+// ---------- SETUP ----------
+void setup() {
+  pinMode(TRIG_FRONT, OUTPUT);
+  pinMode(ECHO_FRONT, INPUT);
+
+  pinMode(TRIG_LEFT, OUTPUT);
+  pinMode(ECHO_LEFT, INPUT);
+
+  pinMode(TRIG_RIGHT, OUTPUT);
+  pinMode(ECHO_RIGHT, INPUT);
+
+  pinMode(IR_BOTTOM_LEFT, INPUT);
+  pinMode(IR_BOTTOM_RIGHT, INPUT);
+  pinMode(IR_TOP_LEFT, INPUT);
+  pinMode(IR_TOP_RIGHT, INPUT);
+
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  servo1.attach(SERVO1_PIN);
+  servo2.attach(SERVO2_PIN);
+
+  // Start open
+  openServos();
+
+  Serial.begin(9600);
+
+  stopMotors();
+}
+
+// ---------- LOOP ----------
+void loop() {
+  long frontDistance = readDistance(TRIG_FRONT, ECHO_FRONT);
+  long leftDistance = readDistance(TRIG_LEFT, ECHO_LEFT);
+  long rightDistance = readDistance(TRIG_RIGHT, ECHO_RIGHT);
+
+  Serial.print("Front: ");
+  Serial.print(frontDistance);
+  Serial.print(" | Left: ");
+  Serial.print(leftDistance);
+  Serial.print(" | Right: ");
+  Serial.println(rightDistance);
+
+  // Left ultrasonic sees something
+  if (leftDistance < ultrasonicDistance) {
+    stopMotors();
+    delay(300);
+
+    faceObjectFromLeft();
+
+    moveCloserUntilIRSees();
+  }
+
+  // Right ultrasonic sees something
+  else if (rightDistance < ultrasonicDistance) {
+    stopMotors();
+    delay(300);
+
+    faceObjectFromRight();
+
+    moveCloserUntilIRSees();
+  }
+
+  // Front ultrasonic sees something
+  else if (frontDistance < ultrasonicDistance) {
+    stopMotors();
+    delay(300);
+
+    moveCloserUntilIRSees();
+  }
+
+  // Nothing detected
+  else {
+    forward();
+  }
+
+  delay(50);
+}
