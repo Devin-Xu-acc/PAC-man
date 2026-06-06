@@ -1,0 +1,391 @@
+#include <Servo.h>
+
+// ---------- ULTRASONIC SENSORS ----------
+#define TRIG_FRONT 2
+#define ECHO_FRONT 3
+
+#define TRIG_LEFT 4
+#define ECHO_LEFT 5
+
+#define TRIG_RIGHT 6
+#define ECHO_RIGHT 7
+
+// ---------- IR SENSORS (ANALOG) ----------
+#define IR_BOTTOM_LEFT A0
+#define IR_BOTTOM_RIGHT A1
+#define IR_TOP_LEFT A2
+#define IR_TOP_RIGHT A3
+
+// ---------- MOTOR DRIVER (PWM FIX APPLIED) ----------
+#define ENA 5      // PWM
+#define ENB 6      // PWM
+
+#define IN1 8
+#define IN2 9
+#define IN3 10
+#define IN4 11
+
+// ---------- SERVOS ----------
+#define SERVO1_PIN 12
+#define SERVO2_PIN 13
+
+Servo servo1;
+Servo servo2;
+
+// ---------- TUNED SETTINGS ----------
+int ultrasonicDistance = 26;
+
+int motorSpeed = 155;
+int creepSpeed = 95;
+
+int turnAroundTime = 1150;
+int reverseAwayTime = 700;
+int faceObjectTurnTime = 240;
+
+int reverseBackTime = 420;
+int reverseIntoTrashTime = 800;
+
+// ---------- IR ANALOG THRESHOLDS ----------
+int bottomLeftThreshold  = 520;
+int bottomRightThreshold = 520;
+int topLeftThreshold     = 520;
+int topRightThreshold    = 520;
+
+// ---------- SERVO POSITIONS ----------
+int servo1Open = 180;
+int servo2Open = 0;
+
+int servo1Closed = 0;
+int servo2Closed = 180;
+
+// ---------- MOTION STATE ----------
+enum Motion { STOPPED, FWD, CREEP, REV, TURN_L, TURN_R };
+Motion motion = STOPPED;
+
+// ---------- ULTRASONIC ----------
+long readDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  long duration = pulseIn(echoPin, HIGH, 30000);
+  if (duration == 0) return 999;
+
+  return duration * 0.0343 / 2;
+}
+
+// ---------- IR ANALOG ----------
+int readIRAverage(int pin) {
+  long total = 0;
+  for (int i = 0; i < 5; i++) {
+    total += analogRead(pin);
+    delay(2);
+  }
+  return total / 5;
+}
+
+void readAllIR(bool &bL, bool &bR, bool &tL, bool &tR) {
+  int bl = readIRAverage(IR_BOTTOM_LEFT);
+  int br = readIRAverage(IR_BOTTOM_RIGHT);
+  int tl = readIRAverage(IR_TOP_LEFT);
+  int tr = readIRAverage(IR_TOP_RIGHT);
+
+  bL = bl < bottomLeftThreshold;
+  bR = br < bottomRightThreshold;
+  tL = tl < topLeftThreshold;
+  tR = tr < topRightThreshold;
+
+  Serial.print("IR BL:"); Serial.print(bl);
+  Serial.print(" BR:"); Serial.print(br);
+  Serial.print(" TL:"); Serial.print(tl);
+  Serial.print(" TR:"); Serial.print(tr);
+
+  Serial.print(" | Detected BL:");
+  Serial.print(bL); Serial.print(" BR:");
+  Serial.print(bR); Serial.print(" TL:");
+  Serial.print(tL); Serial.print(" TR:");
+  Serial.println(tR);
+}
+
+// ---------- MOTOR CONTROL ----------
+void setSpeed(int s) {
+  analogWrite(ENA, s);
+  analogWrite(ENB, s);
+}
+
+void stopMotors() {
+  analogWrite(ENA, 0);
+  analogWrite(ENB, 0);
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  motion = STOPPED;
+}
+
+void forward() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+
+  if (motion != FWD) {
+    analogWrite(ENA, 200);
+    analogWrite(ENB, 200);
+    delay(80);
+    motion = FWD;
+  }
+  setSpeed(motorSpeed);
+}
+
+void creepForward() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+
+  if (motion != CREEP) {
+    analogWrite(ENA, 170);
+    analogWrite(ENB, 170);
+    delay(60);
+    motion = CREEP;
+  }
+  setSpeed(creepSpeed);
+}
+
+void reverse() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  setSpeed(motorSpeed);
+  motion = REV;
+}
+
+void left() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  setSpeed(motorSpeed);
+  motion = TURN_L;
+}
+
+void right() {
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  setSpeed(motorSpeed);
+  motion = TURN_R;
+}
+
+// ---------- SERVOS ----------
+void openServos() {
+  servo1.write(servo1Open);
+  servo2.write(servo2Open);
+}
+
+void closeServos() {
+  servo1.write(servo1Closed);
+  servo2.write(servo2Closed);
+}
+
+// ---------- TURNING ----------
+void faceObjectFromLeft() {
+  left();
+  delay(faceObjectTurnTime);
+  stopMotors();
+  delay(200);
+}
+
+void faceObjectFromRight() {
+  right();
+  delay(faceObjectTurnTime);
+  stopMotors();
+  delay(200);
+}
+
+void turnAroundOnly() {
+  right();
+  delay(turnAroundTime);
+  stopMotors();
+  delay(200);
+}
+
+void turnAroundAndSearch() {
+  Serial.println("OBSTACLE DETECTED - TURNING AROUND");
+
+  stopMotors();
+  delay(200);
+
+  reverse();
+  delay(reverseAwayTime);
+
+  stopMotors();
+  delay(200);
+
+  turnAroundOnly();
+}
+
+// ---------- TRASH PICKUP ----------
+void reverseBackABit() {
+  reverse();
+  delay(reverseBackTime);
+  stopMotors();
+  delay(200);
+}
+
+void reverseIntoTrash() {
+  openServos();
+  delay(300);
+
+  reverse();
+  delay(reverseIntoTrashTime);
+
+  stopMotors();
+  delay(200);
+
+  closeServos();
+  delay(1000);
+}
+
+void handleTrash() {
+  Serial.println("TRASH DETECTED");
+
+  stopMotors();
+  delay(200);
+
+  reverseBackABit();
+  openServos();
+  delay(300);
+
+  turnAroundOnly();
+  reverseIntoTrash();
+  turnAroundOnly();
+
+  stopMotors();
+  delay(300);
+}
+
+// ---------- APPROACH + CLASSIFY ----------
+void moveCloserThenCheckIR() {
+  unsigned long start = millis();
+
+  while (millis() - start < 2500) {
+    bool bL, bR, tL, tR;
+    readAllIR(bL, bR, tL, tR);
+
+    bool bottom = bL || bR;
+    bool top = tL || tR;
+
+    if (top) {
+      stopMotors();
+      delay(200);
+      turnAroundAndSearch();
+      return;
+    }
+
+    if (bottom && !top) {
+      stopMotors();
+      delay(200);
+      handleTrash();
+      return;
+    }
+
+    creepForward();
+    delay(40);
+  }
+
+  stopMotors();
+  delay(200);
+  turnAroundAndSearch();
+}
+
+// ---------- SETUP ----------
+void setup() {
+  pinMode(TRIG_FRONT, OUTPUT);
+  pinMode(ECHO_FRONT, INPUT);
+
+  pinMode(TRIG_LEFT, OUTPUT);
+  pinMode(ECHO_LEFT, INPUT);
+
+  pinMode(TRIG_RIGHT, OUTPUT);
+  pinMode(ECHO_RIGHT, INPUT);
+
+  pinMode(IR_BOTTOM_LEFT, INPUT);
+  pinMode(IR_BOTTOM_RIGHT, INPUT);
+  pinMode(IR_TOP_LEFT, INPUT);
+  pinMode(IR_TOP_RIGHT, INPUT);
+
+  pinMode(ENA, OUTPUT);
+  pinMode(ENB, OUTPUT);
+
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT);
+
+  servo1.attach(SERVO1_PIN);
+  servo2.attach(SERVO2_PIN);
+
+  openServos();
+
+  Serial.begin(9600);
+  stopMotors();
+  delay(300);
+}
+
+// ---------- LOOP ----------
+void loop() {
+  long front = readDistance(TRIG_FRONT, ECHO_FRONT);
+  long leftD = readDistance(TRIG_LEFT, ECHO_LEFT);
+  long rightD = readDistance(TRIG_RIGHT, ECHO_RIGHT);
+
+  bool bL, bR, tL, tR;
+  readAllIR(bL, bR, tL, tR);
+
+  bool bottom = bL || bR;
+  bool top = tL || tR;
+
+  Serial.print("US F:"); Serial.print(front);
+  Serial.print(" L:"); Serial.print(leftD);
+  Serial.print(" R:"); Serial.println(rightD);
+
+  if (top) {
+    turnAroundAndSearch();
+  }
+
+  else if (bottom) {
+    handleTrash();
+  }
+
+  else if (leftD < ultrasonicDistance) {
+    stopMotors();
+    delay(200);
+    faceObjectFromLeft();
+    moveCloserThenCheckIR();
+  }
+
+  else if (rightD < ultrasonicDistance) {
+    stopMotors();
+    delay(200);
+    faceObjectFromRight();
+    moveCloserThenCheckIR();
+  }
+
+  else if (front < ultrasonicDistance) {
+    stopMotors();
+    delay(200);
+    moveCloserThenCheckIR();
+  }
+
+  else {
+    forward();
+  }
+
+  delay(40);
+}
